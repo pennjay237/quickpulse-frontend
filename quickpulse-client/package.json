@@ -1,0 +1,23 @@
+{
+  "name": "quickpulse-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "chart.js": "^4.5.1",
+    "react": "^19.2.4",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
+    "react-scripts": "^5.0.1",
+    "socket.io-client": "^4.8.3",
+    "web-vitals": "^5.1.0"
+  }
+}
