@@ -1,0 +1,72 @@
+.landing-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.landing-content {
+  text-align: center;
+  max-width: 800px;
+  width: 100%;
+}
+
+.landing-content h1 {
+  font-size: 3rem;
+  color: white;
+  margin-bottom: 1rem;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.landing-content p {
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 3rem;
+}
+
+.role-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.host-btn, .participant-btn {
+  background: white;
+  border: none;
+  padding: 2rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  text-align: left;
+}
+
+.host-btn:hover, .participant-btn:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.host-btn h2, .participant-btn h2 {
+  color: #764ba2;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.host-btn p, .participant-btn p {
+  color: #666;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .role-buttons {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .landing-content h1 {
+    font-size: 2rem;
+  }
+}

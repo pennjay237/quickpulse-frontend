@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './HostLogin.css';
 
@@ -34,7 +34,11 @@ const HostLogin = () => {
     <div className="host-login-container">
       <div className="login-box">
         <h1>QuickPulse</h1>
-        <h2>{isLogin ? 'Host Login' : 'Host Registration'}</h2>
+        <h2>{isLogin ? 'Host Login' : 'Create Host Account'}</h2>
+        
+        <p className="host-info">
+          🎤 Host accounts let you create and manage polls for your sessions.
+        </p>
         
         {error && <div className="error-message">{error}</div>}
         
@@ -47,6 +51,7 @@ const HostLogin = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              placeholder="your@email.com"
             />
           </div>
           
@@ -59,19 +64,24 @@ const HostLogin = () => {
               required
               disabled={loading}
               minLength={6}
+              placeholder="••••••"
             />
           </div>
           
           <button type="submit" disabled={loading}>
-            {loading ? 'Please wait...' : (isLogin ? 'Login' : 'Register')}
+            {loading ? 'Please wait...' : (isLogin ? 'Login as Host' : 'Register as Host')}
           </button>
         </form>
         
         <p className="toggle-link">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          {isLogin ? "Don't have a host account? " : "Already have a host account? "}
           <button onClick={() => setIsLogin(!isLogin)}>
-            {isLogin ? 'Register' : 'Login'}
+            {isLogin ? 'Register as Host' : 'Login as Host'}
           </button>
+        </p>
+        
+        <p className="back-link">
+          <Link to="/" className="link-btn">← Back to Home</Link>
         </p>
       </div>
     </div>
