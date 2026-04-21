@@ -5,24 +5,77 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-bg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 50%);
+  animation: pulse 10s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .landing-content {
   text-align: center;
-  max-width: 800px;
+  max-width: 900px;
   width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
-.landing-content h1 {
-  font-size: 3rem;
-  color: white;
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
   margin-bottom: 1rem;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
 }
 
-.landing-content p {
+.logo h1 {
+  font-size: 4rem;
+  color: white;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  letter-spacing: -1px;
+}
+
+.pulse-dot {
+  width: 12px;
+  height: 12px;
+  background: #4caf50;
+  border-radius: 50%;
+  animation: pulseDot 2s ease-in-out infinite;
+  box-shadow: 0 0 10px #4caf50;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+}
+
+.tagline {
   font-size: 1.2rem;
-  color: rgba(255,255,255,0.9);
+  color: rgba(255, 255, 255, 0.9);
   margin-bottom: 3rem;
 }
 
@@ -30,22 +83,24 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
-  margin-top: 2rem;
+  margin-bottom: 3rem;
 }
 
 .host-btn, .participant-btn {
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
   border: none;
   padding: 2rem;
-  border-radius: 10px;
+  border-radius: 24px;
   cursor: pointer;
-  transition: transform 0.3s, box-shadow 0.3s;
   text-align: left;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
-.host-btn:hover, .participant-btn:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+.btn-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
 }
 
 .host-btn h2, .participant-btn h2 {
@@ -60,13 +115,47 @@
   font-size: 0.9rem;
 }
 
+.features {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  color: white;
+}
+
+.feature span {
+  font-size: 1.2rem;
+}
+
+.feature p {
+  font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
   .role-buttons {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
   
-  .landing-content h1 {
-    font-size: 2rem;
+  .logo h1 {
+    font-size: 2.5rem;
+  }
+  
+  .tagline {
+    font-size: 1rem;
+  }
+  
+  .host-btn, .participant-btn {
+    padding: 1.5rem;
   }
 }

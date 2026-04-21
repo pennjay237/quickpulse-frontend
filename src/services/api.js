@@ -48,4 +48,10 @@ export const joinSession = (code, name, email, phone) =>
 export const getParticipants = (sessionId) => 
   api.get(`/api/sessions/${sessionId}/participants`);
 
+export const getSessionQRCode = (sessionId) => 
+  api.get(`/api/sessions/${sessionId}/qrcode`);
+
+export const toggleVoice = (sessionId, enabled) => 
+  api.patch(`/api/sessions/${sessionId}/voice`, { enabled });
+
 export default api;

@@ -15,19 +15,12 @@ function App() {
       <AuthProvider>
         <SocketProvider>
           <Routes>
-            {/* Public Landing Page */}
             <Route path="/" element={<LandingPage />} />
-            
-            {/* Host Routes */}
             <Route path="/host/login" element={<HostLogin />} />
             <Route path="/host/dashboard" element={<HostDashboard />} />
             <Route path="/host/session/:sessionCode" element={<HostSession />} />
-            
-            {/* Participant Routes */}
             <Route path="/join" element={<ParticipantJoin />} />
             <Route path="/join/:sessionCode" element={<ParticipantJoin />} />
-            
-            {/* Default redirect */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </SocketProvider>

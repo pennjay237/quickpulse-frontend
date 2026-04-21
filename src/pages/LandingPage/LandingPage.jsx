@@ -12,20 +12,12 @@ const LandingPage = () => {
         <p>Real-time polling for meetings and webinars</p>
         
         <div className="role-buttons">
-          <button 
-            className="host-btn"
-            onClick={() => navigate('/host/login')}
-          >
-            <h2>🎤 Host a Session</h2>
-            <p>Create and manage polls for your audience</p>
+          <button className="host-btn" onClick={() => navigate('/host/login')}>
+            🎤 Host a Session
           </button>
           
-          <button 
-            className="participant-btn"
-            onClick={() => navigate('/join')}
-          >
-            <h2>👥 Join a Session</h2>
-            <p>Enter a session code to participate</p>
+          <button className="participant-btn" onClick={() => navigate('/join')}>
+            👥 Join a Session
           </button>
         </div>
       </div>
