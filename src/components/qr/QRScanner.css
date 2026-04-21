@@ -1,0 +1,89 @@
+.qr-scanner-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-scanner-container {
+  background: white;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 500px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.qr-scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.qr-scanner-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  width: auto;
+  padding: 0;
+  line-height: 1;
+}
+
+.scanner-wrapper {
+  padding: 1rem;
+  background: #000;
+  min-height: 300px;
+}
+
+.error-message {
+  margin: 1rem;
+  padding: 0.75rem;
+  background: #fee;
+  color: #c62828;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.scanner-instruction {
+  text-align: center;
+  padding: 1rem;
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.cancel-btn {
+  margin: 1rem;
+  width: calc(100% - 2rem);
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+#qr-reader {
+  width: 100% !important;
+}
+
+#qr-reader__dashboard_section_csr {
+  display: none;
+}
