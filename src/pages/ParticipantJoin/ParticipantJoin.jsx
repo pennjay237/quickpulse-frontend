@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import QRScanner from '../../components/qr/QRScanner';
 import './ParticipantJoin.css';
 
 const ParticipantJoin = () => {
@@ -8,7 +7,6 @@ const ParticipantJoin = () => {
   const [step, setStep] = useState(urlCode ? 'details' : 'code');
   const [sessionCode, setSessionCode] = useState(urlCode || '');
   const [sessionInfo, setSessionInfo] = useState(null);
-  const [showScanner, setShowScanner] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -20,6 +18,7 @@ const ParticipantJoin = () => {
 
   const fetchSessionInfo = async (code) => {
     setLoading(true);
+    setError('');
     try {
       const response = await fetch(`http://localhost:5000/api/sessions/code/${code}`);
       const data = await response.json();
@@ -27,10 +26,10 @@ const ParticipantJoin = () => {
         setSessionInfo(data);
         setStep('details');
       } else {
-        setError(data.error || 'Session not found');
+        setError(data.error || 'Session not found. Please check the code.');
       }
     } catch (err) {
-      setError('Failed to find session');
+      setError('Cannot connect to server. Make sure backend is running.');
     } finally {
       setLoading(false);
     }
@@ -38,20 +37,17 @@ const ParticipantJoin = () => {
 
   const handleCodeSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    await fetchSessionInfo(sessionCode);
+    if (sessionCode.length === 6) {
+      await fetchSessionInfo(sessionCode);
+    } else {
+      setError('Please enter a valid 6-character session code');
+    }
   };
 
-  const handleQRScan = (code) => {
-    setSessionCode(code);
-    setShowScanner(false);
-    fetchSessionInfo(code);
-  };
-
-  const handleDetailsSubmit = async (e) => {
+  const handleJoinSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
 
     try {
       const response = await fetch('http://localhost:5000/api/sessions/join', {
@@ -76,7 +72,7 @@ const ParticipantJoin = () => {
         setError(data.error || 'Failed to join session');
       }
     } catch (err) {
-      setError('Failed to join session');
+      setError('Failed to connect to server');
     } finally {
       setLoading(false);
     }
@@ -97,42 +93,33 @@ const ParticipantJoin = () => {
         {step === 'code' ? (
           <form onSubmit={handleCodeSubmit}>
             <div className="form-group">
-              <label>Session Code</label>
+              <label>Enter Session Code</label>
               <input
                 type="text"
-                placeholder="Enter 6-character code"
+                placeholder="e.g., 78W45M"
                 value={sessionCode}
                 onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
                 maxLength="6"
                 required
                 disabled={loading}
+                className="code-input"
+                autoFocus
               />
+              <small>Enter the 6-character code provided by the host</small>
             </div>
-            
-            <div className="divider">
-              <span>OR</span>
-            </div>
-            
-            <button 
-              type="button" 
-              onClick={() => setShowScanner(true)}
-              className="scan-btn"
-            >
-              📷 Scan QR Code
-            </button>
             
             {error && <div className="error-message">{error}</div>}
             
             <button type="submit" disabled={loading}>
-              {loading ? 'Checking...' : 'Continue'}
+              {loading ? 'Checking...' : 'Continue →'}
             </button>
           </form>
         ) : (
-          <form onSubmit={handleDetailsSubmit}>
+          <form onSubmit={handleJoinSubmit}>
             {sessionInfo && (
               <div className="session-info">
                 <h3>{sessionInfo.name}</h3>
-                <p>Code: <strong>{sessionCode}</strong></p>
+                <p>Session Code: <strong>{sessionCode}</strong></p>
                 {sessionInfo.voice_enabled && (
                   <span className="voice-badge">🎤 Voice Enabled</span>
                 )}
@@ -181,10 +168,10 @@ const ParticipantJoin = () => {
             
             <div className="form-actions">
               <button type="button" onClick={() => setStep('code')} className="btn-back">
-                Back
+                ← Back
               </button>
               <button type="submit" disabled={loading}>
-                {loading ? 'Joining...' : 'Join Session'}
+                {loading ? 'Joining...' : 'Join Session →'}
               </button>
             </div>
           </form>
@@ -194,13 +181,6 @@ const ParticipantJoin = () => {
           ← Back to Home
         </button>
       </div>
-
-      {showScanner && (
-        <QRScanner 
-          onScanSuccess={handleQRScan}
-          onClose={() => setShowScanner(false)}
-        />
-      )}
     </div>
   );
 };

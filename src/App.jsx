@@ -7,6 +7,7 @@ import HostLogin from './pages/HostLogin/HostLogin';
 import HostDashboard from './pages/HostDashboard/HostDashboard';
 import HostSession from './pages/HostSession/HostSession';
 import ParticipantJoin from './pages/ParticipantJoin/ParticipantJoin';
+import ParticipantView from './pages/ParticipantView/ParticipantView';
 import './App.css';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             <Route path="/host/session/:sessionCode" element={<HostSession />} />
             <Route path="/join" element={<ParticipantJoin />} />
             <Route path="/join/:sessionCode" element={<ParticipantJoin />} />
+            <Route path="/participant/:sessionCode" element={<ParticipantView />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </SocketProvider>
