@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import PollCreator from '../../components/host/PollCreator/PollCreator';
-import QRCodeDisplay from '../../components/host/QRCodeDisplay/QRCodeDisplay';
-import './HostSession.css';
+import { useSocket } from '../../context/SocketContext';
+import { Plus, X, Send, BarChart3, Eye, EyeOff, RotateCcw, Copy, Download } from 'lucide-react';
+import Container from '../../components/layout/Container';
+import Header from '../../components/layout/Header';
+import QRCode from 'qrcode';
 
 const HostSession = () => {
   const { sessionCode } = useParams();
@@ -11,25 +13,47 @@ const HostSession = () => {
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [participants, setParticipants] = useState([]);
-  const [selectedPoll, setSelectedPoll] = useState(null);
-  const [showResults, setShowResults] = useState(false);
-  const { user, logout } = useAuth();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newPoll, setNewPoll] = useState({ question: '', type: 'single', options: ['', ''] });
+  const [showResults, setShowResults] = useState(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState(null);
+  const { user } = useAuth();
+  const { socket, isConnected, joinHostRoom, emitPollPublished, emitPollClosed, emitPollReopened } = useSocket();
   const navigate = useNavigate();
 
-  const getToken = () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/host/login');
-      return null;
+  useEffect(() => {
+    if (user?.id) {
+      joinHostRoom(user.id);
     }
-    return token;
-  };
+  }, [user, joinHostRoom]);
 
   useEffect(() => {
     fetchSession();
     fetchPolls();
     fetchParticipants();
+    generateQRCode();
   }, [sessionCode]);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on('response-received', (data) => {
+        fetchPolls();
+      });
+      return () => {
+        socket.off('response-received');
+      };
+    }
+  }, [socket]);
+
+  const generateQRCode = async () => {
+    try {
+      const url = `${window.location.origin}/join/${sessionCode}`;
+      const qr = await QRCode.toDataURL(url, { width: 200, margin: 2 });
+      setQrCodeUrl(qr);
+    } catch (err) {
+      console.error('QR generation error:', err);
+    }
+  };
 
   const fetchSession = async () => {
     try {
@@ -37,293 +61,383 @@ const HostSession = () => {
       const data = await response.json();
       if (response.ok) {
         setSession(data);
-      } else {
-        navigate('/host/dashboard');
       }
     } catch (error) {
-      console.error('Error fetching session:', error);
+      console.error('Error:', error);
     }
   };
 
   const fetchPolls = async () => {
     try {
-      const token = getToken();
-      if (!token) return;
-      
+      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/polls/session/${sessionCode}`, {
         headers: { 'x-auth-token': token }
       });
-      
       const data = await response.json();
       if (response.ok) {
         setPolls(data);
       }
     } catch (error) {
-      console.error('Error fetching polls:', error);
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchParticipants = async () => {
-    if (!session?.id) return;
     try {
-      const token = getToken();
-      if (!token) return;
-      
-      const response = await fetch(`http://localhost:5000/api/sessions/${session.id}/participants`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/sessions/${session?.id}/participants`, {
         headers: { 'x-auth-token': token }
       });
-      
+      const data = await response.json();
       if (response.ok) {
-        const data = await response.json();
         setParticipants(data);
       }
     } catch (error) {
-      console.error('Error fetching participants:', error);
+      console.error('Error:', error);
     }
   };
 
-  const handlePollCreated = (newPoll) => {
-    setPolls([newPoll, ...polls]);
+  const createPoll = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/polls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          sessionId: session?.id,
+          question: newPoll.question,
+          type: newPoll.type === 'single' ? 'single-choice' : 
+                newPoll.type === 'multiple' ? 'multiple-choice' : 'open-ended',
+          options: newPoll.type !== 'open' ? newPoll.options.filter(o => o.trim()) : []
+        })
+      });
+      if (response.ok) {
+        fetchPolls();
+        setShowCreateModal(false);
+        setNewPoll({ question: '', type: 'single', options: ['', ''] });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
   };
 
   const publishPoll = async (pollId) => {
     try {
-      const token = getToken();
-      if (!token) return;
-      
+      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/polls/${pollId}/publish`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token
-        }
+        headers: { 'x-auth-token': token }
       });
-      
+      const publishedPoll = await response.json();
       if (response.ok) {
+        emitPollPublished(publishedPoll, sessionCode);
         fetchPolls();
       }
     } catch (error) {
-      console.error('Error publishing poll:', error);
+      console.error('Error:', error);
     }
   };
 
   const closePoll = async (pollId) => {
     try {
-      const token = getToken();
-      if (!token) return;
-      
+      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/polls/${pollId}/close`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token
-        }
+        headers: { 'x-auth-token': token }
       });
-      
       if (response.ok) {
+        emitPollClosed(pollId, sessionCode);
         fetchPolls();
       }
     } catch (error) {
-      console.error('Error closing poll:', error);
+      console.error('Error:', error);
     }
   };
 
   const reopenPoll = async (pollId) => {
     try {
-      const token = getToken();
-      if (!token) return;
-      
+      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/polls/${pollId}/reopen`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token
-        }
+        headers: { 'x-auth-token': token }
       });
-      
+      const reopenedPoll = await response.json();
       if (response.ok) {
+        emitPollReopened(reopenedPoll, sessionCode);
         fetchPolls();
       }
     } catch (error) {
-      console.error('Error reopening poll:', error);
+      console.error('Error:', error);
     }
   };
 
-  const viewResults = async (poll) => {
-    try {
-      const token = getToken();
-      if (!token) return;
-      
-      const response = await fetch(`http://localhost:5000/api/polls/${poll.id}/results`, {
-        headers: { 'x-auth-token': token }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedPoll(data);
-        setShowResults(true);
-      }
-    } catch (error) {
-      console.error('Error fetching results:', error);
-    }
+  const copyJoinLink = () => {
+    const link = `${window.location.origin}/join/${sessionCode}`;
+    navigator.clipboard.writeText(link);
+    alert('Join link copied to clipboard');
   };
 
-  const getPollTypeIcon = (type) => {
-    switch(type) {
-      case 'single-choice': return '🔘';
-      case 'multiple-choice': return '✅';
-      case 'open-ended': return '✏️';
-      default: return '📊';
-    }
-  };
-
-  const getStatusBadge = (status) => {
+  const getStatusConfig = (status) => {
     switch(status) {
-      case 'draft': return <span className="badge draft">📝 Draft</span>;
-      case 'published': return <span className="badge published">✓ Published</span>;
-      case 'closed': return <span className="badge closed">🔒 Closed</span>;
-      default: return null;
+      case 'draft': return { label: 'Draft', className: 'badge-draft', icon: EyeOff };
+      case 'published': return { label: 'Published', className: 'badge-published', icon: Eye };
+      case 'closed': return { label: 'Closed', className: 'badge-closed', icon: EyeOff };
+      default: return { label: status, className: 'badge-inactive', icon: EyeOff };
     }
+  };
+
+  const addOption = () => {
+    setNewPoll({ ...newPoll, options: [...newPoll.options, ''] });
+  };
+
+  const updateOption = (index, value) => {
+    const updated = [...newPoll.options];
+    updated[index] = value;
+    setNewPoll({ ...newPoll, options: updated });
+  };
+
+  const removeOption = (index) => {
+    const updated = newPoll.options.filter((_, i) => i !== index);
+    setNewPoll({ ...newPoll, options: updated });
   };
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loader"></div>
-        <p>Loading session...</p>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex items-center justify-center h-96">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="host-session">
-      <header className="session-header">
-        <div>
-          <h1>{session?.name}</h1>
-          <p className="participant-count">👥 {participants.length} participants joined</p>
-        </div>
-        <div className="header-actions">
-          <button className="back-btn" onClick={() => navigate('/host/dashboard')}>
-            ← Dashboard
-          </button>
-        </div>
-      </header>
-
-      <main className="session-main">
-        {/* QR Code Display Section */}
-        <div className="qr-section">
-          <QRCodeDisplay 
-            sessionCode={sessionCode} 
-            sessionName={session?.name}
-          />
-        </div>
-
-        <div className="two-columns">
-          <div className="create-poll-section">
-            <PollCreator 
-              sessionId={session?.id} 
-              onPollCreated={handlePollCreated}
-            />
-          </div>
-
-          <div className="polls-section">
-            <h2>📋 Your Polls ({polls.length})</h2>
-            {polls.length === 0 ? (
-              <div className="no-polls">
-                <div className="no-polls-icon">📊</div>
-                <h3>No polls yet</h3>
-                <p>Create your first poll using the form above!</p>
-              </div>
-            ) : (
-              <div className="polls-list">
-                {polls.map(poll => (
-                  <div key={poll.id} className="poll-card">
-                    <div className="poll-card-header">
-                      <div className="poll-title">
-                        <span className="poll-icon">{getPollTypeIcon(poll.type)}</span>
-                        <h3>{poll.question}</h3>
-                      </div>
-                      <div className="poll-badges">
-                        {getStatusBadge(poll.status)}
-                        <span className="poll-type-badge">{poll.type}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="poll-stats">
-                      <div className="stat">
-                        <span className="stat-label">Responses:</span>
-                        <span className="stat-value">{poll.response_count || 0}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="poll-actions">
-                      {poll.status === 'draft' && (
-                        <button onClick={() => publishPoll(poll.id)} className="publish-btn">
-                          📢 Publish Poll
-                        </button>
-                      )}
-                      {poll.status === 'published' && (
-                        <>
-                          <button onClick={() => closePoll(poll.id)} className="close-btn">
-                            🔒 Close Poll
-                          </button>
-                          <button onClick={() => viewResults(poll)} className="results-btn">
-                            📊 View Results
-                          </button>
-                        </>
-                      )}
-                      {poll.status === 'closed' && (
-                        <>
-                          <button onClick={() => reopenPoll(poll.id)} className="reopen-btn">
-                            🔄 Reopen Poll
-                          </button>
-                          <button onClick={() => viewResults(poll)} className="results-btn">
-                            📊 View Results
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      
+      <Container className="py-8">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{session?.name}</h1>
+            <p className="text-gray-600 mt-1">Session Code: <span className="font-mono font-semibold">{sessionCode}</span></p>
+            <p className="text-sm text-gray-500 mt-1">{participants.length} participant(s) joined</p>
+            {!isConnected && (
+              <p className="text-xs text-red-500 mt-1">Reconnecting to real-time server...</p>
             )}
           </div>
+          <div className="flex gap-3">
+            <button onClick={copyJoinLink} className="btn-secondary">
+              <Copy className="w-4 h-4" />
+              Copy Link
+            </button>
+            <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+              <Plus className="w-4 h-4" />
+              Create Poll
+            </button>
+          </div>
         </div>
-      </main>
 
-      {/* Results Modal */}
-      {showResults && selectedPoll && (
-        <div className="modal-overlay" onClick={() => setShowResults(false)}>
-          <div className="results-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Poll Results</h2>
-              <button className="close-modal" onClick={() => setShowResults(false)}>✕</button>
+        {qrCodeUrl && (
+          <div className="card p-6 mb-8 flex items-center gap-6 flex-wrap">
+            <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
+            <div>
+              <h3 className="font-semibold text-gray-900">Quick Join</h3>
+              <p className="text-sm text-gray-600">Scan this QR code with your phone camera to join</p>
             </div>
-            <div className="modal-body">
-              <h3>{selectedPoll.question}</h3>
-              <div className="results-stats">
-                <div className="total-responses">
-                  Total Responses: <strong>{selectedPoll.total_responses || 0}</strong>
-                </div>
-              </div>
-              
-              {selectedPoll.responses && selectedPoll.responses.length > 0 ? (
-                <div className="responses-list">
-                  <h4>Participant Responses:</h4>
-                  {selectedPoll.responses.map((response, idx) => (
-                    <div key={idx} className="response-item">
-                      <div className="response-answer">📝 {response.answer}</div>
-                      <div className="response-meta">
-                        from: {response.participant_name} at {new Date(response.submitted_at).toLocaleTimeString()}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Polls</h2>
+          {polls.length === 0 ? (
+            <div className="card p-12 text-center">
+              <p className="text-gray-500">No polls created yet. Click Create Poll to get started.</p>
+            </div>
+          ) : (
+            polls.map(poll => {
+              const status = getStatusConfig(poll.status);
+              const StatusIcon = status.icon;
+              return (
+                <div key={poll.id} className="card p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{poll.question}</h3>
+                      <div className="flex gap-2 mt-2">
+                        <span className={`badge ${status.className}`}>
+                          <StatusIcon className="w-3 h-3 inline mr-1" />
+                          {status.label}
+                        </span>
+                        <span className="text-xs text-gray-500">{poll.type}</span>
                       </div>
                     </div>
-                  ))}
+                    <div className="text-sm text-gray-600">
+                      {poll.response_count || 0} response(s)
+                    </div>
+                  </div>
+                  
+                  {poll.options && poll.options.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {poll.options.slice(0, 4).map((opt, i) => (
+                        <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
+                          {opt}
+                        </span>
+                      ))}
+                      {poll.options.length > 4 && (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-md">
+                          +{poll.options.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    {poll.status === 'draft' && (
+                      <button onClick={() => publishPoll(poll.id)} className="btn-primary text-sm">
+                        Publish
+                      </button>
+                    )}
+                    {poll.status === 'published' && (
+                      <>
+                        <button onClick={() => closePoll(poll.id)} className="btn-secondary text-sm">
+                          Close
+                        </button>
+                        <button onClick={() => setShowResults(poll)} className="btn-outline text-sm">
+                          <BarChart3 className="w-4 h-4" />
+                          Results
+                        </button>
+                      </>
+                    )}
+                    {poll.status === 'closed' && (
+                      <>
+                        <button onClick={() => reopenPoll(poll.id)} className="btn-outline text-sm">
+                          <RotateCcw className="w-4 h-4" />
+                          Reopen
+                        </button>
+                        <button onClick={() => setShowResults(poll)} className="btn-outline text-sm">
+                          <BarChart3 className="w-4 h-4" />
+                          Results
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="no-responses">No responses yet. Share the poll with participants!</div>
+              );
+            })
+          )}
+        </div>
+      </Container>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="card p-6 w-full max-w-lg mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Create Poll</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="label">Question</label>
+                <input
+                  type="text"
+                  value={newPoll.question}
+                  onChange={(e) => setNewPoll({ ...newPoll, question: e.target.value })}
+                  className="input"
+                  placeholder="What would you like to ask?"
+                />
+              </div>
+              
+              <div>
+                <label className="label">Poll Type</label>
+                <select
+                  value={newPoll.type}
+                  onChange={(e) => setNewPoll({ ...newPoll, type: e.target.value, options: ['', ''] })}
+                  className="input"
+                >
+                  <option value="single">Single Choice</option>
+                  <option value="multiple">Multiple Choice</option>
+                  <option value="open">Open Ended</option>
+                </select>
+              </div>
+              
+              {newPoll.type !== 'open' && (
+                <div>
+                  <label className="label">Options</label>
+                  {newPoll.options.map((opt, idx) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={(e) => updateOption(idx, e.target.value)}
+                        className="input flex-1"
+                        placeholder={`Option ${idx + 1}`}
+                      />
+                      {newPoll.options.length > 2 && (
+                        <button onClick={() => removeOption(idx)} className="text-gray-400 hover:text-red-600">
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={addOption} className="btn-ghost text-sm mt-1">
+                    <Plus className="w-4 h-4" />
+                    Add Option
+                  </button>
+                </div>
               )}
+              
+              <div className="flex gap-3 pt-4">
+                <button onClick={createPoll} className="btn-primary flex-1">
+                  <Send className="w-4 h-4" />
+                  Create Poll
+                </button>
+                <button onClick={() => setShowCreateModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResults && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="card p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Poll Results</h2>
+              <button onClick={() => setShowResults(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <h3 className="font-medium text-gray-900 mb-4">{showResults.question}</h3>
+            
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">Total responses: {showResults.response_count || 0}</p>
+              
+              {showResults.options && showResults.options.map((opt, idx) => {
+                const count = showResults.responses?.filter(r => r.answer === opt).length || 0;
+                const percentage = showResults.response_count ? (count / showResults.response_count) * 100 : 0;
+                return (
+                  <div key={idx}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-700">{opt}</span>
+                      <span className="text-gray-500">{count} ({Math.round(percentage)}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percentage}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
