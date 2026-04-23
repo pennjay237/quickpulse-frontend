@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import QRScanner from '../../components/qr/QRScanner';
 import './ParticipantJoin.css';
 
 const ParticipantJoin = () => {
@@ -7,6 +8,7 @@ const ParticipantJoin = () => {
   const [step, setStep] = useState(urlCode ? 'details' : 'code');
   const [sessionCode, setSessionCode] = useState(urlCode || '');
   const [sessionInfo, setSessionInfo] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -42,6 +44,12 @@ const ParticipantJoin = () => {
     } else {
       setError('Please enter a valid 6-character session code');
     }
+  };
+
+  const handleQRScanSuccess = (code) => {
+    setSessionCode(code);
+    setShowScanner(false);
+    fetchSessionInfo(code);
   };
 
   const handleJoinSubmit = async (e) => {
@@ -107,6 +115,14 @@ const ParticipantJoin = () => {
               />
               <small>Enter the 6-character code provided by the host</small>
             </div>
+            
+            <div className="divider">
+              <span>OR</span>
+            </div>
+            
+            <button type="button" onClick={() => setShowScanner(true)} className="scan-qr-btn">
+              📷 Scan QR Code
+            </button>
             
             {error && <div className="error-message">{error}</div>}
             
@@ -181,6 +197,13 @@ const ParticipantJoin = () => {
           ← Back to Home
         </button>
       </div>
+
+      {showScanner && (
+        <QRScanner 
+          onScanSuccess={handleQRScanSuccess}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </div>
   );
 };
