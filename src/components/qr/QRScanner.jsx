@@ -7,28 +7,43 @@ const QRScanner = ({ onScanSuccess, onClose }) => {
   const scannerRef = useRef(null);
 
   useEffect(() => {
+    // Initialize QR scanner
     const scanner = new Html5QrcodeScanner(
-      "qr-reader",
+      "qr-reader-container",
       {
         fps: 10,
         qrbox: { width: 250, height: 250 },
         aspectRatio: 1.0,
+        showTorchButtonIfSupported: true,
+        showZoomSliderIfSupported: true,
       },
       false
     );
 
     scanner.render(
       (decodedText) => {
-        const match = decodedText.match(/\/join\/([A-Z0-9]{6})/);
+        // Try to extract session code from URL or direct code
+        let sessionCode = decodedText;
+        
+        // Check if it's a URL
+        const match = decodedText.match(/\/join\/([A-Z0-9]{6})/i);
         if (match) {
+          sessionCode = match[1];
+        }
+        
+        // Check if it's just a 6-character code
+        if (/^[A-Z0-9]{6}$/i.test(sessionCode)) {
           scanner.clear();
-          onScanSuccess(match[1]);
+          onScanSuccess(sessionCode.toUpperCase());
         } else {
           setError('Invalid QR code. Please scan a valid session QR code.');
+          // Auto clear error after 3 seconds
+          setTimeout(() => setError(''), 3000);
         }
       },
       (errorMessage) => {
-        console.warn(errorMessage);
+        // Ignore scanning errors, they happen frequently during scanning
+        console.debug(errorMessage);
       }
     );
 
@@ -49,7 +64,7 @@ const QRScanner = ({ onScanSuccess, onClose }) => {
           <button onClick={onClose} className="close-btn">×</button>
         </div>
         
-        <div id="qr-reader" className="scanner-wrapper"></div>
+        <div id="qr-reader-container" className="scanner-wrapper"></div>
         
         {error && <div className="error-message">{error}</div>}
         
