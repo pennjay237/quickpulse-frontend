@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import PollCreator from '../../components/host/PollCreator/PollCreator';
+import QRCodeDisplay from '../../components/host/QRCodeDisplay/QRCodeDisplay';
 import './HostSession.css';
 
 const HostSession = () => {
@@ -15,45 +16,13 @@ const HostSession = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Helper function to get token
   const getToken = () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('No token found');
       navigate('/host/login');
       return null;
     }
     return token;
-  };
-
-  // Helper function for authenticated fetch
-  const authFetch = async (url, options = {}) => {
-    const token = getToken();
-    if (!token) return null;
-
-    const defaultOptions = {
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-token': token
-      }
-    };
-
-    try {
-      const response = await fetch(url, { ...defaultOptions, ...options });
-      
-      if (response.status === 401) {
-        // Token expired or invalid
-        console.error('Authentication failed');
-        logout();
-        navigate('/host/login');
-        return null;
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Fetch error:', error);
-      throw error;
-    }
   };
 
   useEffect(() => {
@@ -84,12 +53,6 @@ const HostSession = () => {
       const response = await fetch(`http://localhost:5000/api/polls/session/${sessionCode}`, {
         headers: { 'x-auth-token': token }
       });
-      
-      if (response.status === 401) {
-        logout();
-        navigate('/host/login');
-        return;
-      }
       
       const data = await response.json();
       if (response.ok) {
@@ -140,9 +103,6 @@ const HostSession = () => {
       
       if (response.ok) {
         fetchPolls();
-      } else if (response.status === 401) {
-        logout();
-        navigate('/host/login');
       }
     } catch (error) {
       console.error('Error publishing poll:', error);
@@ -164,9 +124,6 @@ const HostSession = () => {
       
       if (response.ok) {
         fetchPolls();
-      } else if (response.status === 401) {
-        logout();
-        navigate('/host/login');
       }
     } catch (error) {
       console.error('Error closing poll:', error);
@@ -178,9 +135,6 @@ const HostSession = () => {
       const token = getToken();
       if (!token) return;
       
-      console.log('Reopening poll:', pollId);
-      console.log('Token:', token);
-      
       const response = await fetch(`http://localhost:5000/api/polls/${pollId}/reopen`, {
         method: 'PATCH',
         headers: {
@@ -189,19 +143,8 @@ const HostSession = () => {
         }
       });
       
-      console.log('Response status:', response.status);
-      
       if (response.ok) {
-        const data = await response.json();
-        console.log('Poll reopened:', data);
         fetchPolls();
-      } else if (response.status === 401) {
-        console.error('Authentication failed - redirecting to login');
-        logout();
-        navigate('/host/login');
-      } else {
-        const error = await response.json();
-        console.error('Error reopening poll:', error);
       }
     } catch (error) {
       console.error('Error reopening poll:', error);
@@ -221,9 +164,6 @@ const HostSession = () => {
         const data = await response.json();
         setSelectedPoll(data);
         setShowResults(true);
-      } else if (response.status === 401) {
-        logout();
-        navigate('/host/login');
       }
     } catch (error) {
       console.error('Error fetching results:', error);
@@ -262,20 +202,9 @@ const HostSession = () => {
       <header className="session-header">
         <div>
           <h1>{session?.name}</h1>
-          <p className="session-code">Session Code: <strong>{sessionCode}</strong></p>
           <p className="participant-count">👥 {participants.length} participants joined</p>
         </div>
         <div className="header-actions">
-          <button 
-            className="share-btn"
-            onClick={() => {
-              const link = `${window.location.origin}/join/${sessionCode}`;
-              navigator.clipboard.writeText(link);
-              alert('✓ Join link copied to clipboard!');
-            }}
-          >
-            📋 Copy Join Link
-          </button>
           <button className="back-btn" onClick={() => navigate('/host/dashboard')}>
             ← Dashboard
           </button>
@@ -283,74 +212,84 @@ const HostSession = () => {
       </header>
 
       <main className="session-main">
-        <div className="create-poll-section">
-          <PollCreator 
-            sessionId={session?.id} 
-            onPollCreated={handlePollCreated}
+        {/* QR Code Display Section */}
+        <div className="qr-section">
+          <QRCodeDisplay 
+            sessionCode={sessionCode} 
+            sessionName={session?.name}
           />
         </div>
 
-        <div className="polls-section">
-          <h2>📋 Your Polls ({polls.length})</h2>
-          {polls.length === 0 ? (
-            <div className="no-polls">
-              <div className="no-polls-icon">📊</div>
-              <h3>No polls yet</h3>
-              <p>Create your first poll using the form above!</p>
-            </div>
-          ) : (
-            <div className="polls-list">
-              {polls.map(poll => (
-                <div key={poll.id} className="poll-card">
-                  <div className="poll-card-header">
-                    <div className="poll-title">
-                      <span className="poll-icon">{getPollTypeIcon(poll.type)}</span>
-                      <h3>{poll.question}</h3>
+        <div className="two-columns">
+          <div className="create-poll-section">
+            <PollCreator 
+              sessionId={session?.id} 
+              onPollCreated={handlePollCreated}
+            />
+          </div>
+
+          <div className="polls-section">
+            <h2>📋 Your Polls ({polls.length})</h2>
+            {polls.length === 0 ? (
+              <div className="no-polls">
+                <div className="no-polls-icon">📊</div>
+                <h3>No polls yet</h3>
+                <p>Create your first poll using the form above!</p>
+              </div>
+            ) : (
+              <div className="polls-list">
+                {polls.map(poll => (
+                  <div key={poll.id} className="poll-card">
+                    <div className="poll-card-header">
+                      <div className="poll-title">
+                        <span className="poll-icon">{getPollTypeIcon(poll.type)}</span>
+                        <h3>{poll.question}</h3>
+                      </div>
+                      <div className="poll-badges">
+                        {getStatusBadge(poll.status)}
+                        <span className="poll-type-badge">{poll.type}</span>
+                      </div>
                     </div>
-                    <div className="poll-badges">
-                      {getStatusBadge(poll.status)}
-                      <span className="poll-type-badge">{poll.type}</span>
+                    
+                    <div className="poll-stats">
+                      <div className="stat">
+                        <span className="stat-label">Responses:</span>
+                        <span className="stat-value">{poll.response_count || 0}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="poll-actions">
+                      {poll.status === 'draft' && (
+                        <button onClick={() => publishPoll(poll.id)} className="publish-btn">
+                          📢 Publish Poll
+                        </button>
+                      )}
+                      {poll.status === 'published' && (
+                        <>
+                          <button onClick={() => closePoll(poll.id)} className="close-btn">
+                            🔒 Close Poll
+                          </button>
+                          <button onClick={() => viewResults(poll)} className="results-btn">
+                            📊 View Results
+                          </button>
+                        </>
+                      )}
+                      {poll.status === 'closed' && (
+                        <>
+                          <button onClick={() => reopenPoll(poll.id)} className="reopen-btn">
+                            🔄 Reopen Poll
+                          </button>
+                          <button onClick={() => viewResults(poll)} className="results-btn">
+                            📊 View Results
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="poll-stats">
-                    <div className="stat">
-                      <span className="stat-label">Responses:</span>
-                      <span className="stat-value">{poll.response_count || 0}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="poll-actions">
-                    {poll.status === 'draft' && (
-                      <button onClick={() => publishPoll(poll.id)} className="publish-btn">
-                        📢 Publish Poll
-                      </button>
-                    )}
-                    {poll.status === 'published' && (
-                      <>
-                        <button onClick={() => closePoll(poll.id)} className="close-btn">
-                          🔒 Close Poll
-                        </button>
-                        <button onClick={() => viewResults(poll)} className="results-btn">
-                          📊 View Results
-                        </button>
-                      </>
-                    )}
-                    {poll.status === 'closed' && (
-                      <>
-                        <button onClick={() => reopenPoll(poll.id)} className="reopen-btn">
-                          🔄 Reopen Poll
-                        </button>
-                        <button onClick={() => viewResults(poll)} className="results-btn">
-                          📊 View Results
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
