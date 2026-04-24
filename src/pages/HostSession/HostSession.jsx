@@ -2,13 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { Plus, X, Send, BarChart3, Eye, EyeOff, RotateCcw, Copy, Download } from 'lucide-react';
+import { Plus, X, Send, BarChart3, Eye, EyeOff, RotateCcw, Copy, Download, Video, VideoOff } from 'lucide-react';
 import Container from '../../components/layout/Container';
 import Header from '../../components/layout/Header';
 import QRCode from 'qrcode';
+import VideoMeeting from '../../components/video/VideoMeeting';
 
 const HostSession = () => {
   const { sessionCode } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { socket, isConnected, joinHostRoom, emitPollPublished, emitPollClosed, emitPollReopened } = useSocket();
+  
   const [session, setSession] = useState(null);
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,9 +22,7 @@ const HostSession = () => {
   const [newPoll, setNewPoll] = useState({ question: '', type: 'single', options: ['', ''] });
   const [showResults, setShowResults] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
-  const { user } = useAuth();
-  const { socket, isConnected, joinHostRoom, emitPollPublished, emitPollClosed, emitPollReopened } = useSocket();
-  const navigate = useNavigate();
+  const [showVideoMeeting, setShowVideoMeeting] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -36,7 +39,7 @@ const HostSession = () => {
 
   useEffect(() => {
     if (socket) {
-      socket.on('response-received', (data) => {
+      socket.on('response-received', () => {
         fetchPolls();
       });
       return () => {
@@ -85,9 +88,10 @@ const HostSession = () => {
   };
 
   const fetchParticipants = async () => {
+    if (!session?.id) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/sessions/${session?.id}/participants`, {
+      const response = await fetch(`http://localhost:5000/api/sessions/${session.id}/participants`, {
         headers: { 'x-auth-token': token }
       });
       const data = await response.json();
@@ -232,6 +236,10 @@ const HostSession = () => {
             )}
           </div>
           <div className="flex gap-3">
+            <button onClick={() => setShowVideoMeeting(true)} className="btn-primary">
+              <Video className="w-4 h-4" />
+              Start Video Meeting
+            </button>
             <button onClick={copyJoinLink} className="btn-secondary">
               <Copy className="w-4 h-4" />
               Copy Link
@@ -441,6 +449,16 @@ const HostSession = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Video Meeting Modal */}
+      {showVideoMeeting && (
+        <VideoMeeting
+          roomId={sessionCode}
+          userName={user?.email?.split('@')[0] || 'Host'}
+          userId={user?.id}
+          onLeave={() => setShowVideoMeeting(false)}
+        />
       )}
     </div>
   );
