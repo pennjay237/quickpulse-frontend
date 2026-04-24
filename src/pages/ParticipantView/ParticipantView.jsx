@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
-import { Send, LogOut, Check, Wifi, WifiOff, Bell } from 'lucide-react';
+import { Send, LogOut, Check, Wifi, WifiOff, Bell, Lock, ArrowUp, Video } from 'lucide-react';
 import Container from '../../components/layout/Container';
 import Header from '../../components/layout/Header';
+import VideoMeeting from '../../components/video/VideoMeeting';
 
 const ParticipantView = () => {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
+  const { socket, isConnected, joinSessionRoom, emitResponse } = useSocket();
+  
+  // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONS
   const [sessionInfo, setSessionInfo] = useState(null);
   const [participantInfo, setParticipantInfo] = useState(null);
   const [polls, setPolls] = useState([]);
@@ -16,9 +20,9 @@ const ParticipantView = () => {
   const [submitting, setSubmitting] = useState({});
   const [error, setError] = useState('');
   const [notification, setNotification] = useState(null);
-  const { socket, isConnected, joinSessionRoom, emitResponse } = useSocket();
+  const [showVideoMeeting, setShowVideoMeeting] = useState(false);
 
-  // Initialize participant data
+  // Fetch initial data
   useEffect(() => {
     const storedParticipant = localStorage.getItem('participant');
     const storedSessionInfo = localStorage.getItem('sessionInfo');
@@ -34,15 +38,14 @@ const ParticipantView = () => {
     fetchPolls();
   }, [sessionCode, navigate]);
 
-  // Join socket room only when socket is connected
+  // Join socket room
   useEffect(() => {
     if (isConnected && participantInfo && sessionCode) {
-      console.log('Socket connected, joining session room');
       joinSessionRoom(sessionCode, participantInfo.id, participantInfo.name);
     }
   }, [isConnected, participantInfo, sessionCode, joinSessionRoom]);
 
-  // Auto-dismiss notification after 5 seconds
+  // Auto-dismiss notification
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 5000);
@@ -53,56 +56,55 @@ const ParticipantView = () => {
   // Socket event listeners
   useEffect(() => {
     if (!socket) return;
-    
-    console.log('Setting up socket listeners');
 
     const handleNewPoll = (poll) => {
-      console.log('New poll received:', poll);
-      
-      // Show notification
       setNotification({
         type: 'new-poll',
         title: 'New Poll Available!',
         message: poll.question
       });
       
-      // Add poll to state - THIS MAKES IT APPEAR IMMEDIATELY
       setPolls(prev => {
-        // Check if poll already exists
-        if (prev.some(p => p.id === poll.id)) {
-          return prev;
-        }
-        console.log('Adding new poll to list:', poll.question);
-        return [...prev, { 
-          ...poll, 
-          answered: false,
-          status: 'published'
-        }];
+        if (prev.some(p => p.id === poll.id)) return prev;
+        const newPoll = { ...poll, answered: false, status: 'published' };
+        const unanswered = prev.filter(p => !p.answered && p.status !== 'closed');
+        const answered = prev.filter(p => p.answered || p.status === 'closed');
+        return [newPoll, ...unanswered, ...answered];
       });
     };
 
     const handlePollClosed = ({ pollId }) => {
-      console.log('Poll closed:', pollId);
       setNotification({
         type: 'poll-closed',
         title: 'Poll Closed',
-        message: 'A poll has been closed'
+        message: 'This poll is no longer accepting answers'
       });
-      setPolls(prev => prev.map(poll => 
-        poll.id === pollId ? { ...poll, status: 'closed', active: false } : poll
-      ));
+      
+      setPolls(prev => {
+        const updated = prev.map(poll => 
+          poll.id === pollId ? { ...poll, status: 'closed', active: false } : poll
+        );
+        const unanswered = updated.filter(p => !p.answered && p.status !== 'closed');
+        const closedOrAnswered = updated.filter(p => p.answered || p.status === 'closed');
+        return [...unanswered, ...closedOrAnswered];
+      });
     };
 
     const handlePollReopened = (poll) => {
-      console.log('Poll reopened:', poll);
       setNotification({
         type: 'poll-reopened',
         title: 'Poll Reopened',
         message: poll.question
       });
-      setPolls(prev => prev.map(p => 
-        p.id === poll.id ? { ...poll, status: 'published', answered: false } : p
-      ));
+      
+      setPolls(prev => {
+        const updated = prev.map(p => 
+          p.id === poll.id ? { ...poll, status: 'published', answered: false } : p
+        );
+        const unanswered = updated.filter(p => !p.answered && p.status === 'published');
+        const answered = updated.filter(p => p.answered || p.status === 'closed');
+        return [...unanswered, ...answered];
+      });
     };
 
     socket.on('new-poll', handleNewPoll);
@@ -173,10 +175,14 @@ const ParticipantView = () => {
       if (response.ok) {
         emitResponse(pollId, finalAnswer, participantInfo.name, sessionCode);
         
-        // Mark poll as answered - THIS HIDES THE SUBMIT BUTTON
-        setPolls(prev => prev.map(poll => 
-          poll.id === pollId ? { ...poll, answered: true } : poll
-        ));
+        setPolls(prev => {
+          const updated = prev.map(poll => 
+            poll.id === pollId ? { ...poll, answered: true, status: 'answered' } : poll
+          );
+          const unanswered = updated.filter(p => !p.answered && p.status !== 'closed');
+          const answered = updated.filter(p => p.answered || p.status === 'closed');
+          return [...unanswered, ...answered];
+        });
         
         setNotification({
           type: 'success',
@@ -201,6 +207,11 @@ const ParticipantView = () => {
     navigate('/');
   };
 
+  // Filter polls AFTER all hooks are declared
+  const activePolls = polls.filter(p => !p.answered && p.status !== 'closed');
+  const answeredPolls = polls.filter(p => p.answered || p.status === 'closed');
+
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -212,6 +223,7 @@ const ParticipantView = () => {
     );
   }
 
+  // Main return
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -219,27 +231,24 @@ const ParticipantView = () => {
       <Container className="py-8">
         {/* Notification Banner */}
         {notification && (
-          <div className={`mb-4 p-4 rounded-lg flex items-center gap-3 animate-slide-in ${
-            notification.type === 'new-poll' ? 'bg-blue-50 border border-blue-200' :
-            notification.type === 'poll-closed' ? 'bg-yellow-50 border border-yellow-200' :
-            notification.type === 'poll-reopened' ? 'bg-purple-50 border border-purple-200' :
-            'bg-green-50 border border-green-200'
-          }`}>
-            <Bell className={`w-5 h-5 ${
-              notification.type === 'new-poll' ? 'text-blue-600' :
-              notification.type === 'poll-closed' ? 'text-yellow-600' :
-              notification.type === 'poll-reopened' ? 'text-purple-600' :
-              'text-green-600'
-            }`} />
-            <div className="flex-1">
-              <p className="font-medium text-gray-900">{notification.title}</p>
-              <p className="text-sm text-gray-600">{notification.message}</p>
+          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md animate-slide-in ${
+            notification.type === 'new-poll' ? 'bg-blue-500' :
+            notification.type === 'poll-closed' ? 'bg-yellow-500' :
+            notification.type === 'poll-reopened' ? 'bg-purple-500' :
+            'bg-green-500'
+          } text-white rounded-lg shadow-lg`}>
+            <div className="p-4 flex items-center gap-3">
+              <Bell className="w-5 h-5" />
+              <div className="flex-1">
+                <p className="font-semibold">{notification.title}</p>
+                <p className="text-sm opacity-90">{notification.message}</p>
+              </div>
+              <button onClick={() => setNotification(null)} className="text-white/70 hover:text-white">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <button onClick={() => setNotification(null)} className="text-gray-400 hover:text-gray-600">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         )}
 
@@ -267,6 +276,10 @@ const ParticipantView = () => {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">{participantInfo?.name}</span>
+            <button onClick={() => setShowVideoMeeting(true)} className="btn-primary text-sm">
+              <Video className="w-4 h-4" />
+              Join Video
+            </button>
             <button onClick={leaveSession} className="btn-secondary text-sm">
               <LogOut className="w-4 h-4" />
               Leave
@@ -275,136 +288,159 @@ const ParticipantView = () => {
         </div>
 
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Active Polls ({polls.length})</h2>
-            {polls.length > 0 && (
-              <span className="text-xs text-gray-500">Live updates enabled</span>
-            )}
-          </div>
-          
-          {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
-          
-          {polls.length === 0 ? (
+          {/* Active Polls Section */}
+          {activePolls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Active Polls</h2>
+                <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{activePolls.length}</span>
+              </div>
+              
+              <div className="grid gap-4">
+                {activePolls.map(poll => (
+                  <div key={poll.id} className="card p-6 transition-all duration-200 hover:shadow-md border-l-4 border-l-primary-500">
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 text-lg">{poll.question}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                              {poll.type === 'single-choice' ? 'Single Choice' : 
+                               poll.type === 'multiple-choice' ? 'Multiple Choice' : 'Open Ended'}
+                            </span>
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                              Accepting answers
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {poll.type === 'single-choice' && poll.options?.map((opt, idx) => (
+                        <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
+                          ${!poll.answered && selectedAnswers[poll.id] === opt ? 'bg-primary-50 border border-primary-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                          <input
+                            type="radio"
+                            name={`poll-${poll.id}`}
+                            value={opt}
+                            checked={selectedAnswers[poll.id] === opt}
+                            onChange={() => handleAnswerSelect(poll.id, opt, 'single-choice')}
+                            disabled={poll.answered}
+                            className="w-4 h-4 text-primary-600"
+                          />
+                          <span className="text-gray-700">{opt}</span>
+                        </label>
+                      ))}
+                      
+                      {poll.type === 'multiple-choice' && poll.options?.map((opt, idx) => (
+                        <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
+                          ${!poll.answered && (selectedAnswers[poll.id] || []).includes(opt) ? 'bg-primary-50 border border-primary-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                          <input
+                            type="checkbox"
+                            value={opt}
+                            checked={(selectedAnswers[poll.id] || []).includes(opt)}
+                            onChange={() => handleAnswerSelect(poll.id, opt, 'multiple-choice')}
+                            disabled={poll.answered}
+                            className="w-4 h-4 text-primary-600 rounded"
+                          />
+                          <span className="text-gray-700">{opt}</span>
+                        </label>
+                      ))}
+                      
+                      {poll.type === 'open-ended' && (
+                        <textarea
+                          value={selectedAnswers[poll.id] || ''}
+                          onChange={(e) => handleAnswerSelect(poll.id, e.target.value, 'open-ended')}
+                          disabled={poll.answered}
+                          className="input"
+                          rows={3}
+                          placeholder="Type your answer here..."
+                        />
+                      )}
+                    </div>
+                    
+                    {!poll.answered && (
+                      <button
+                        onClick={() => handleSubmit(poll.id, selectedAnswers[poll.id], poll.type)}
+                        disabled={submitting[poll.id]}
+                        className="btn-primary mt-5 w-full py-2.5"
+                      >
+                        {submitting[poll.id] ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" />
+                            Submit Answer
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Past Polls Section */}
+          {answeredPolls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4 pt-4 border-t border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Past Polls</h2>
+                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{answeredPolls.length}</span>
+              </div>
+              
+              <div className="grid gap-3 opacity-75">
+                {answeredPolls.map(poll => (
+                  <div key={poll.id} className="card p-5 bg-gray-50 border-l-4 border-l-gray-300">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-700">{poll.question}</h3>
+                        <div className="flex items-center gap-2 mt-2">
+                          {poll.answered ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                              <Check className="w-3 h-3" />
+                              Answered
+                            </span>
+                          ) : poll.status === 'closed' ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-200 px-2 py-0.5 rounded-full">
+                              <Lock className="w-3 h-3" />
+                              Closed
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* No Polls Message */}
+          {polls.length === 0 && (
             <div className="card p-12 text-center">
               <p className="text-gray-500">No active polls at the moment.</p>
               <p className="text-xs text-gray-400 mt-2">
-                When the host publishes a poll, it will appear here instantly.
+                When the host publishes a poll, it will appear here instantly at the top.
               </p>
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {polls.map(poll => (
-                <div key={poll.id} className="card p-6 transition-all duration-200 hover:shadow-md">
-                  <div className="mb-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 text-lg">{poll.question}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                            {poll.type === 'single-choice' ? 'Single Choice' : 
-                             poll.type === 'multiple-choice' ? 'Multiple Choice' : 'Open Ended'}
-                          </span>
-                        </div>
-                      </div>
-                      {poll.answered && (
-                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
-                          <Check className="w-3 h-3" />
-                          Answered
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {poll.type === 'single-choice' && poll.options?.map((opt, idx) => (
-                      <label 
-                        key={idx} 
-                        className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
-                          ${!poll.answered && 'hover:bg-gray-50'}
-                          ${selectedAnswers[poll.id] === opt && !poll.answered ? 'bg-primary-50 border border-primary-200' : 'border border-transparent'}
-                        `}
-                      >
-                        <input
-                          type="radio"
-                          name={`poll-${poll.id}`}
-                          value={opt}
-                          checked={selectedAnswers[poll.id] === opt}
-                          onChange={() => handleAnswerSelect(poll.id, opt, 'single-choice')}
-                          disabled={poll.answered}
-                          className="w-4 h-4 text-primary-600"
-                        />
-                        <span className={`text-gray-700 ${poll.answered ? 'text-gray-400' : ''}`}>{opt}</span>
-                      </label>
-                    ))}
-                    
-                    {poll.type === 'multiple-choice' && poll.options?.map((opt, idx) => (
-                      <label 
-                        key={idx} 
-                        className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
-                          ${!poll.answered && 'hover:bg-gray-50'}
-                          ${(selectedAnswers[poll.id] || []).includes(opt) && !poll.answered ? 'bg-primary-50 border border-primary-200' : 'border border-transparent'}
-                        `}
-                      >
-                        <input
-                          type="checkbox"
-                          value={opt}
-                          checked={(selectedAnswers[poll.id] || []).includes(opt)}
-                          onChange={() => handleAnswerSelect(poll.id, opt, 'multiple-choice')}
-                          disabled={poll.answered}
-                          className="w-4 h-4 text-primary-600 rounded"
-                        />
-                        <span className={`text-gray-700 ${poll.answered ? 'text-gray-400' : ''}`}>{opt}</span>
-                      </label>
-                    ))}
-                    
-                    {poll.type === 'open-ended' && (
-                      <textarea
-                        value={selectedAnswers[poll.id] || ''}
-                        onChange={(e) => handleAnswerSelect(poll.id, e.target.value, 'open-ended')}
-                        disabled={poll.answered}
-                        className="input"
-                        rows={3}
-                        placeholder="Type your answer here..."
-                      />
-                    )}
-                  </div>
-                  
-                  {/* Submit button - only shows if poll is NOT answered */}
-                  {!poll.answered && (
-                    <button
-                      onClick={() => handleSubmit(poll.id, selectedAnswers[poll.id], poll.type)}
-                      disabled={submitting[poll.id]}
-                      className="btn-primary mt-5 w-full py-2.5"
-                    >
-                      {submitting[poll.id] ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                          Submitting...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" />
-                          Submit Answer
-                        </>
-                      )}
-                    </button>
-                  )}
-                  
-                  {/* Show "Already Answered" message when answered */}
-                  {poll.answered && (
-                    <div className="mt-5 p-3 bg-green-50 rounded-lg text-center">
-                      <p className="text-sm text-green-700 flex items-center justify-center gap-2">
-                        <Check className="w-4 h-4" />
-                        You've already answered this poll
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           )}
         </div>
       </Container>
+
+      {/* Video Meeting Modal */}
+      {showVideoMeeting && (
+        <VideoMeeting
+          roomId={sessionCode}
+          userName={participantInfo?.name || 'Participant'}
+          userId={participantInfo?.id}
+          onLeave={() => setShowVideoMeeting(false)}
+        />
+      )}
     </div>
   );
 };
