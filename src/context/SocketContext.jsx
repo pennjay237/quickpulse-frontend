@@ -17,7 +17,8 @@ export const SocketProvider = ({ children }) => {
   const pendingRooms = useRef([]);
 
   useEffect(() => {
-    const SOCKET_URL = 'http://localhost:5000';
+    // USE ENVIRONMENT VARIABLE - THIS IS THE FIX
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
     console.log('Creating socket connection to:', SOCKET_URL);
     
     const newSocket = io(SOCKET_URL, {

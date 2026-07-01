@@ -6,12 +6,13 @@ import Container from '../../components/layout/Container';
 import Header from '../../components/layout/Header';
 import VideoMeeting from '../../components/video/VideoMeeting';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const ParticipantView = () => {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
   const { socket, isConnected, joinSessionRoom, emitResponse } = useSocket();
   
-  // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONS
   const [sessionInfo, setSessionInfo] = useState(null);
   const [participantInfo, setParticipantInfo] = useState(null);
   const [polls, setPolls] = useState([]);
@@ -22,7 +23,6 @@ const ParticipantView = () => {
   const [notification, setNotification] = useState(null);
   const [showVideoMeeting, setShowVideoMeeting] = useState(false);
 
-  // Fetch initial data
   useEffect(() => {
     const storedParticipant = localStorage.getItem('participant');
     const storedSessionInfo = localStorage.getItem('sessionInfo');
@@ -38,14 +38,12 @@ const ParticipantView = () => {
     fetchPolls();
   }, [sessionCode, navigate]);
 
-  // Join socket room
   useEffect(() => {
     if (isConnected && participantInfo && sessionCode) {
       joinSessionRoom(sessionCode, participantInfo.id, participantInfo.name);
     }
   }, [isConnected, participantInfo, sessionCode, joinSessionRoom]);
 
-  // Auto-dismiss notification
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 5000);
@@ -53,7 +51,6 @@ const ParticipantView = () => {
     }
   }, [notification]);
 
-  // Socket event listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -120,7 +117,7 @@ const ParticipantView = () => {
 
   const fetchPolls = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/polls/session/${sessionCode}`);
+      const response = await fetch(`${API_URL}/api/polls/session/${sessionCode}`);
       const data = await response.json();
       if (response.ok) {
         const publishedPolls = data.filter(poll => poll.status === 'published');
@@ -163,7 +160,7 @@ const ParticipantView = () => {
     setError('');
 
     try {
-      const response = await fetch(`http://localhost:5000/api/polls/${pollId}/respond`, {
+      const response = await fetch(`${API_URL}/api/polls/${pollId}/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,11 +204,9 @@ const ParticipantView = () => {
     navigate('/');
   };
 
-  // Filter polls AFTER all hooks are declared
   const activePolls = polls.filter(p => !p.answered && p.status !== 'closed');
   const answeredPolls = polls.filter(p => p.answered || p.status === 'closed');
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -223,13 +218,11 @@ const ParticipantView = () => {
     );
   }
 
-  // Main return
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       
       <Container className="py-8">
-        {/* Notification Banner */}
         {notification && (
           <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md animate-slide-in ${
             notification.type === 'new-poll' ? 'bg-blue-500' :
@@ -252,7 +245,6 @@ const ParticipantView = () => {
           </div>
         )}
 
-        {/* Connection Status */}
         <div className="mb-4 p-3 bg-gray-100 rounded-lg text-sm">
           <div className="flex items-center gap-2">
             {isConnected ? (
@@ -288,7 +280,6 @@ const ParticipantView = () => {
         </div>
 
         <div className="space-y-6">
-          {/* Active Polls Section */}
           {activePolls.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -385,7 +376,6 @@ const ParticipantView = () => {
             </div>
           )}
 
-          {/* Past Polls Section */}
           {answeredPolls.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-4 pt-4 border-t border-gray-200">
@@ -420,7 +410,6 @@ const ParticipantView = () => {
             </div>
           )}
 
-          {/* No Polls Message */}
           {polls.length === 0 && (
             <div className="card p-12 text-center">
               <p className="text-gray-500">No active polls at the moment.</p>
@@ -432,7 +421,6 @@ const ParticipantView = () => {
         </div>
       </Container>
 
-      {/* Video Meeting Modal */}
       {showVideoMeeting && (
         <VideoMeeting
           roomId={sessionCode}

@@ -8,6 +8,8 @@ import Header from '../../components/layout/Header';
 import QRCode from 'qrcode';
 import VideoMeeting from '../../components/video/VideoMeeting';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const HostSession = () => {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
@@ -60,7 +62,7 @@ const HostSession = () => {
 
   const fetchSession = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/sessions/code/${sessionCode}`);
+      const response = await fetch(`${API_URL}/api/sessions/code/${sessionCode}`);
       const data = await response.json();
       if (response.ok) {
         setSession(data);
@@ -73,7 +75,7 @@ const HostSession = () => {
   const fetchPolls = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/polls/session/${sessionCode}`, {
+      const response = await fetch(`${API_URL}/api/polls/session/${sessionCode}`, {
         headers: { 'x-auth-token': token }
       });
       const data = await response.json();
@@ -91,7 +93,7 @@ const HostSession = () => {
     if (!session?.id) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/sessions/${session.id}/participants`, {
+      const response = await fetch(`${API_URL}/api/sessions/${session.id}/participants`, {
         headers: { 'x-auth-token': token }
       });
       const data = await response.json();
@@ -106,7 +108,7 @@ const HostSession = () => {
   const createPoll = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/polls', {
+      const response = await fetch(`${API_URL}/api/polls`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,7 +135,7 @@ const HostSession = () => {
   const publishPoll = async (pollId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/polls/${pollId}/publish`, {
+      const response = await fetch(`${API_URL}/api/polls/${pollId}/publish`, {
         method: 'PATCH',
         headers: { 'x-auth-token': token }
       });
@@ -150,7 +152,7 @@ const HostSession = () => {
   const closePoll = async (pollId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/polls/${pollId}/close`, {
+      const response = await fetch(`${API_URL}/api/polls/${pollId}/close`, {
         method: 'PATCH',
         headers: { 'x-auth-token': token }
       });
@@ -166,7 +168,7 @@ const HostSession = () => {
   const reopenPoll = async (pollId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/polls/${pollId}/reopen`, {
+      const response = await fetch(`${API_URL}/api/polls/${pollId}/reopen`, {
         method: 'PATCH',
         headers: { 'x-auth-token': token }
       });
