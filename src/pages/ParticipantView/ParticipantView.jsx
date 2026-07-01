@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import './ParticipantView.css';
+import { useSocket } from '../../context/SocketContext';
+import { Send, LogOut, Check, Wifi, WifiOff, Bell, Lock, ArrowUp, Video } from 'lucide-react';
+import Container from '../../components/layout/Container';
+import Header from '../../components/layout/Header';
+import VideoMeeting from '../../components/video/VideoMeeting';
 
 const ParticipantView = () => {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
+  const { socket, isConnected, joinSessionRoom, emitResponse } = useSocket();
+  
+  // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONS
   const [sessionInfo, setSessionInfo] = useState(null);
   const [participantInfo, setParticipantInfo] = useState(null);
   const [polls, setPolls] = useState([]);
@@ -13,11 +19,11 @@ const ParticipantView = () => {
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [submitting, setSubmitting] = useState({});
   const [error, setError] = useState('');
-  const [showVoice, setShowVoice] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [showVideoMeeting, setShowVideoMeeting] = useState(false);
 
+  // Fetch initial data
   useEffect(() => {
-    // Get stored participant and session info
     const storedParticipant = localStorage.getItem('participant');
     const storedSessionInfo = localStorage.getItem('sessionInfo');
     
@@ -27,21 +33,98 @@ const ParticipantView = () => {
     }
     
     setParticipantInfo(JSON.parse(storedParticipant));
-    const session = JSON.parse(storedSessionInfo);
-    setSessionInfo(session);
-    setShowVoice(session.voice_enabled || false);
+    setSessionInfo(JSON.parse(storedSessionInfo));
     
     fetchPolls();
   }, [sessionCode, navigate]);
+
+  // Join socket room
+  useEffect(() => {
+    if (isConnected && participantInfo && sessionCode) {
+      joinSessionRoom(sessionCode, participantInfo.id, participantInfo.name);
+    }
+  }, [isConnected, participantInfo, sessionCode, joinSessionRoom]);
+
+  // Auto-dismiss notification
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  // Socket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewPoll = (poll) => {
+      setNotification({
+        type: 'new-poll',
+        title: 'New Poll Available!',
+        message: poll.question
+      });
+      
+      setPolls(prev => {
+        if (prev.some(p => p.id === poll.id)) return prev;
+        const newPoll = { ...poll, answered: false, status: 'published' };
+        const unanswered = prev.filter(p => !p.answered && p.status !== 'closed');
+        const answered = prev.filter(p => p.answered || p.status === 'closed');
+        return [newPoll, ...unanswered, ...answered];
+      });
+    };
+
+    const handlePollClosed = ({ pollId }) => {
+      setNotification({
+        type: 'poll-closed',
+        title: 'Poll Closed',
+        message: 'This poll is no longer accepting answers'
+      });
+      
+      setPolls(prev => {
+        const updated = prev.map(poll => 
+          poll.id === pollId ? { ...poll, status: 'closed', active: false } : poll
+        );
+        const unanswered = updated.filter(p => !p.answered && p.status !== 'closed');
+        const closedOrAnswered = updated.filter(p => p.answered || p.status === 'closed');
+        return [...unanswered, ...closedOrAnswered];
+      });
+    };
+
+    const handlePollReopened = (poll) => {
+      setNotification({
+        type: 'poll-reopened',
+        title: 'Poll Reopened',
+        message: poll.question
+      });
+      
+      setPolls(prev => {
+        const updated = prev.map(p => 
+          p.id === poll.id ? { ...poll, status: 'published', answered: false } : p
+        );
+        const unanswered = updated.filter(p => !p.answered && p.status === 'published');
+        const answered = updated.filter(p => p.answered || p.status === 'closed');
+        return [...unanswered, ...answered];
+      });
+    };
+
+    socket.on('new-poll', handleNewPoll);
+    socket.on('poll-closed', handlePollClosed);
+    socket.on('poll-reopened', handlePollReopened);
+
+    return () => {
+      socket.off('new-poll', handleNewPoll);
+      socket.off('poll-closed', handlePollClosed);
+      socket.off('poll-reopened', handlePollReopened);
+    };
+  }, [socket]);
 
   const fetchPolls = async () => {
     try {
       const response = await fetch(`http://localhost:5000/api/polls/session/${sessionCode}`);
       const data = await response.json();
       if (response.ok) {
-        // Filter only published polls
         const publishedPolls = data.filter(poll => poll.status === 'published');
-        setPolls(publishedPolls);
+        setPolls(publishedPolls.map(poll => ({ ...poll, answered: false })));
       }
     } catch (err) {
       console.error('Error fetching polls:', err);
@@ -50,16 +133,28 @@ const ParticipantView = () => {
     }
   };
 
-  const handleAnswerSelect = (pollId, answer) => {
-    setSelectedAnswers({
-      ...selectedAnswers,
-      [pollId]: answer
-    });
+  const handleAnswerSelect = (pollId, answer, type) => {
+    if (type === 'single-choice') {
+      setSelectedAnswers({ ...selectedAnswers, [pollId]: answer });
+    } else if (type === 'multiple-choice') {
+      const current = selectedAnswers[pollId] || [];
+      if (current.includes(answer)) {
+        setSelectedAnswers({ ...selectedAnswers, [pollId]: current.filter(a => a !== answer) });
+      } else {
+        setSelectedAnswers({ ...selectedAnswers, [pollId]: [...current, answer] });
+      }
+    } else {
+      setSelectedAnswers({ ...selectedAnswers, [pollId]: answer });
+    }
   };
 
-  const handleSubmitAnswer = async (pollId) => {
-    const answer = selectedAnswers[pollId];
-    if (!answer && answer !== 0) {
+  const handleSubmit = async (pollId, answer, type) => {
+    let finalAnswer = answer;
+    if (type === 'multiple-choice' && Array.isArray(answer)) {
+      finalAnswer = answer.join(', ');
+    }
+    
+    if (!finalAnswer || (Array.isArray(finalAnswer) && finalAnswer.length === 0)) {
       setError('Please select an answer');
       return;
     }
@@ -73,29 +168,36 @@ const ParticipantView = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           participantId: participantInfo.id,
-          answer: answer.toString()
+          answer: finalAnswer
         })
       });
 
       if (response.ok) {
-        // Mark poll as answered
-        setPolls(polls.map(poll => 
-          poll.id === pollId ? { ...poll, answered: true } : poll
-        ));
+        emitResponse(pollId, finalAnswer, participantInfo.name, sessionCode);
+        
+        setPolls(prev => {
+          const updated = prev.map(poll => 
+            poll.id === pollId ? { ...poll, answered: true, status: 'answered' } : poll
+          );
+          const unanswered = updated.filter(p => !p.answered && p.status !== 'closed');
+          const answered = updated.filter(p => p.answered || p.status === 'closed');
+          return [...unanswered, ...answered];
+        });
+        
+        setNotification({
+          type: 'success',
+          title: 'Answer Submitted!',
+          message: 'Your response has been recorded'
+        });
       } else {
         const data = await response.json();
-        setError(data.error || 'Failed to submit answer');
+        setError(data.error || 'Failed to submit');
       }
     } catch (err) {
       setError('Failed to submit answer');
     } finally {
       setSubmitting({ ...submitting, [pollId]: false });
     }
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    // Here you would implement actual audio muting
   };
 
   const leaveSession = () => {
@@ -105,148 +207,240 @@ const ParticipantView = () => {
     navigate('/');
   };
 
+  // Filter polls AFTER all hooks are declared
+  const activePolls = polls.filter(p => !p.answered && p.status !== 'closed');
+  const answeredPolls = polls.filter(p => p.answered || p.status === 'closed');
+
+  // Loading state
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loader"></div>
-        <p>Loading session...</p>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex items-center justify-center h-96">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
+  // Main return
   return (
-    <div className="participant-view">
-      {/* Header */}
-      <header className="participant-header">
-        <div className="header-content">
-          <div>
-            <h1>{sessionInfo?.name}</h1>
-            <p className="session-code">Code: {sessionCode}</p>
-          </div>
-          <div className="header-actions">
-            {showVoice && (
-              <button 
-                onClick={toggleMute} 
-                className={`voice-btn ${isMuted ? 'muted' : ''}`}
-              >
-                {isMuted ? '🔇 Unmute' : '🎤 Mute'}
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      
+      <Container className="py-8">
+        {/* Notification Banner */}
+        {notification && (
+          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md animate-slide-in ${
+            notification.type === 'new-poll' ? 'bg-blue-500' :
+            notification.type === 'poll-closed' ? 'bg-yellow-500' :
+            notification.type === 'poll-reopened' ? 'bg-purple-500' :
+            'bg-green-500'
+          } text-white rounded-lg shadow-lg`}>
+            <div className="p-4 flex items-center gap-3">
+              <Bell className="w-5 h-5" />
+              <div className="flex-1">
+                <p className="font-semibold">{notification.title}</p>
+                <p className="text-sm opacity-90">{notification.message}</p>
+              </div>
+              <button onClick={() => setNotification(null)} className="text-white/70 hover:text-white">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Connection Status */}
+        <div className="mb-4 p-3 bg-gray-100 rounded-lg text-sm">
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <>
+                <Wifi className="w-4 h-4 text-green-600" />
+                <span className="text-green-600">Connected - Real-time updates active</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4 text-yellow-600" />
+                <span className="text-yellow-600">Connecting to real-time...</span>
+              </>
             )}
-            <button onClick={leaveSession} className="leave-btn">
-              Leave Session
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{sessionInfo?.name}</h1>
+            <p className="text-sm text-gray-500">Code: {sessionCode}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">{participantInfo?.name}</span>
+            <button onClick={() => setShowVideoMeeting(true)} className="btn-primary text-sm">
+              <Video className="w-4 h-4" />
+              Join Video
+            </button>
+            <button onClick={leaveSession} className="btn-secondary text-sm">
+              <LogOut className="w-4 h-4" />
+              Leave
             </button>
           </div>
         </div>
-      </header>
 
-      {/* Participant Info */}
-      <div className="participant-info">
-        <div className="info-card">
-          <span className="info-label">You are participating as:</span>
-          <span className="info-value">{participantInfo?.name}</span>
-          <span className="info-email">{participantInfo?.email}</span>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="participant-main">
-        <div className="polls-container">
-          <h2>Active Polls</h2>
-          
-          {error && <div className="error-message">{error}</div>}
-          
-          {polls.length === 0 ? (
-            <div className="no-polls">
-              <div className="no-polls-icon">📊</div>
-              <h3>No Active Polls</h3>
-              <p>When the host publishes a poll, it will appear here.</p>
+        <div className="space-y-6">
+          {/* Active Polls Section */}
+          {activePolls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Active Polls</h2>
+                <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{activePolls.length}</span>
+              </div>
+              
+              <div className="grid gap-4">
+                {activePolls.map(poll => (
+                  <div key={poll.id} className="card p-6 transition-all duration-200 hover:shadow-md border-l-4 border-l-primary-500">
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 text-lg">{poll.question}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                              {poll.type === 'single-choice' ? 'Single Choice' : 
+                               poll.type === 'multiple-choice' ? 'Multiple Choice' : 'Open Ended'}
+                            </span>
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                              Accepting answers
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {poll.type === 'single-choice' && poll.options?.map((opt, idx) => (
+                        <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
+                          ${!poll.answered && selectedAnswers[poll.id] === opt ? 'bg-primary-50 border border-primary-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                          <input
+                            type="radio"
+                            name={`poll-${poll.id}`}
+                            value={opt}
+                            checked={selectedAnswers[poll.id] === opt}
+                            onChange={() => handleAnswerSelect(poll.id, opt, 'single-choice')}
+                            disabled={poll.answered}
+                            className="w-4 h-4 text-primary-600"
+                          />
+                          <span className="text-gray-700">{opt}</span>
+                        </label>
+                      ))}
+                      
+                      {poll.type === 'multiple-choice' && poll.options?.map((opt, idx) => (
+                        <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-150 cursor-pointer
+                          ${!poll.answered && (selectedAnswers[poll.id] || []).includes(opt) ? 'bg-primary-50 border border-primary-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                          <input
+                            type="checkbox"
+                            value={opt}
+                            checked={(selectedAnswers[poll.id] || []).includes(opt)}
+                            onChange={() => handleAnswerSelect(poll.id, opt, 'multiple-choice')}
+                            disabled={poll.answered}
+                            className="w-4 h-4 text-primary-600 rounded"
+                          />
+                          <span className="text-gray-700">{opt}</span>
+                        </label>
+                      ))}
+                      
+                      {poll.type === 'open-ended' && (
+                        <textarea
+                          value={selectedAnswers[poll.id] || ''}
+                          onChange={(e) => handleAnswerSelect(poll.id, e.target.value, 'open-ended')}
+                          disabled={poll.answered}
+                          className="input"
+                          rows={3}
+                          placeholder="Type your answer here..."
+                        />
+                      )}
+                    </div>
+                    
+                    {!poll.answered && (
+                      <button
+                        onClick={() => handleSubmit(poll.id, selectedAnswers[poll.id], poll.type)}
+                        disabled={submitting[poll.id]}
+                        className="btn-primary mt-5 w-full py-2.5"
+                      >
+                        {submitting[poll.id] ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" />
+                            Submit Answer
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : (
-            <AnimatePresence>
-              {polls.map((poll, index) => (
-                <motion.div
-                  key={poll.id}
-                  className="poll-card"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <div className="poll-header">
-                    <h3>{poll.question}</h3>
-                    {poll.answered && (
-                      <span className="answered-badge">✓ Answered</span>
-                    )}
-                  </div>
-                  
-                  <div className="poll-options">
-                    {poll.type === 'multiple-choice' && poll.options && (
-                      <div className="options-grid">
-                        {poll.options.map((option, idx) => (
-                          <label 
-                            key={idx} 
-                            className={`option-label ${selectedAnswers[poll.id] === option ? 'selected' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              value={option}
-                              checked={selectedAnswers[poll.id] === option}
-                              onChange={() => handleAnswerSelect(poll.id, option)}
-                              disabled={poll.answered || submitting[poll.id]}
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
+          )}
+
+          {/* Past Polls Section */}
+          {answeredPolls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-4 pt-4 border-t border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Past Polls</h2>
+                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{answeredPolls.length}</span>
+              </div>
+              
+              <div className="grid gap-3 opacity-75">
+                {answeredPolls.map(poll => (
+                  <div key={poll.id} className="card p-5 bg-gray-50 border-l-4 border-l-gray-300">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-700">{poll.question}</h3>
+                        <div className="flex items-center gap-2 mt-2">
+                          {poll.answered ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                              <Check className="w-3 h-3" />
+                              Answered
+                            </span>
+                          ) : poll.status === 'closed' ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-200 px-2 py-0.5 rounded-full">
+                              <Lock className="w-3 h-3" />
+                              Closed
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    )}
-                    
-                    {poll.type === 'single-choice' && poll.options && (
-                      <div className="options-grid">
-                        {poll.options.map((option, idx) => (
-                          <label 
-                            key={idx} 
-                            className={`option-label radio ${selectedAnswers[poll.id] === option ? 'selected' : ''}`}
-                          >
-                            <input
-                              type="radio"
-                              name={`poll-${poll.id}`}
-                              value={option}
-                              checked={selectedAnswers[poll.id] === option}
-                              onChange={() => handleAnswerSelect(poll.id, option)}
-                              disabled={poll.answered || submitting[poll.id]}
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {poll.type === 'open-ended' && (
-                      <textarea
-                        className="open-ended-input"
-                        placeholder="Type your answer here..."
-                        value={selectedAnswers[poll.id] || ''}
-                        onChange={(e) => handleAnswerSelect(poll.id, e.target.value)}
-                        disabled={poll.answered || submitting[poll.id]}
-                        rows={3}
-                      />
-                    )}
+                    </div>
                   </div>
-                  
-                  {!poll.answered && (
-                    <button
-                      onClick={() => handleSubmitAnswer(poll.id)}
-                      disabled={submitting[poll.id]}
-                      className="submit-btn"
-                    >
-                      {submitting[poll.id] ? 'Submitting...' : 'Submit Answer'}
-                    </button>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* No Polls Message */}
+          {polls.length === 0 && (
+            <div className="card p-12 text-center">
+              <p className="text-gray-500">No active polls at the moment.</p>
+              <p className="text-xs text-gray-400 mt-2">
+                When the host publishes a poll, it will appear here instantly at the top.
+              </p>
+            </div>
           )}
         </div>
-      </main>
+      </Container>
+
+      {/* Video Meeting Modal */}
+      {showVideoMeeting && (
+        <VideoMeeting
+          roomId={sessionCode}
+          userName={participantInfo?.name || 'Participant'}
+          userId={participantInfo?.id}
+          onLeave={() => setShowVideoMeeting(false)}
+        />
+      )}
     </div>
   );
 };

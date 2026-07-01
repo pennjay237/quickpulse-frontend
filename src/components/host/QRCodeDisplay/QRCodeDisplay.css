@@ -1,0 +1,180 @@
+.qr-code-display {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.qr-header h3 {
+  color: #764ba2;
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.qr-header p {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.qr-code-wrapper {
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.qr-code-image {
+  width: 250px;
+  height: 250px;
+  border: 3px solid #f0f0f0;
+  border-radius: 20px;
+  padding: 1rem;
+  background: white;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.session-info {
+  margin: 1rem 0;
+}
+
+.session-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.session-code-display {
+  font-size: 1rem;
+  color: #666;
+}
+
+.session-code-display strong {
+  color: #764ba2;
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+}
+
+.qr-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.btn-download, .btn-copy {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-download {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-copy {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-download:hover, .btn-copy:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.instructions {
+  background: #f8f9fa;
+  border-radius: 16px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.instruction {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.instruction:last-child {
+  border-bottom: none;
+}
+
+.instruction-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.alternative-link {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.alternative-link p {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.link-box {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.link-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: #f8f9fa;
+  color: #333;
+}
+
+.copy-btn-small {
+  padding: 0.5rem 1rem;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.qr-loading {
+  text-align: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 20px;
+}
+
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f0f0f0;
+  border-top-color: #764ba2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -8,7 +8,6 @@ import HostDashboard from './pages/HostDashboard/HostDashboard';
 import HostSession from './pages/HostSession/HostSession';
 import ParticipantJoin from './pages/ParticipantJoin/ParticipantJoin';
 import ParticipantView from './pages/ParticipantView/ParticipantView';
-import './App.css';
 
 function App() {
   return (
