@@ -5,6 +5,9 @@ import { Plus, Calendar, Users } from 'lucide-react';
 import Container from '../../components/layout/Container';
 import Header from '../../components/layout/Header';
 
+// ADD THIS LINE - Get API URL from environment variables
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const HostDashboard = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +25,8 @@ const HostDashboard = () => {
   const fetchSessions = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/sessions/host', {
+      // CHANGE THIS LINE - Use API_URL instead of hardcoded localhost
+      const response = await fetch(`${API_URL}/api/sessions/host`, {
         headers: { 'x-auth-token': token }
       });
       const data = await response.json();
@@ -40,7 +44,8 @@ const HostDashboard = () => {
     setCreating(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/sessions', {
+      // CHANGE THIS LINE - Use API_URL instead of hardcoded localhost
+      const response = await fetch(`${API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
